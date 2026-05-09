@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rainbow Lines AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: #eee;
+    user-select: none;
+  }
+
+  h1 {
+    font-size: 2rem;
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+    color: #e0e0ff;
+    text-shadow: 0 0 20px #8080ff88;
+  }
+
+  #hud {
+    display: flex;
+    gap: 40px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .score-box {
+    text-align: center;
+  }
+
+  .score-label {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: #8888aa;
+    text-transform: uppercase;
+  }
+
+  .score-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #ffe066;
+    text-shadow: 0 0 10px #ffe06688;
+  }
+
+  #next-preview {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .preview-label {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: #8888aa;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+
+  .preview-ball {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(9, 60px);
+    grid-template-rows: repeat(9, 60px);
+    gap: 3px;
+    background: #0d0d1a;
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: 0 0 40px #0008;
+  }
+
+  .cell {
+    width: 60px;
+    height: 60px;
+    background: #16213e;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.1s;
+    position: relative;
+  }
+
+  .cell:hover {
+    background: #1e2d50;
+  }
+
+  .cell.selected {
+    background: #2a3f6f;
+    box-shadow: inset 0 0 0 2px #5599ff;
+  }
+
+  .cell.highlight {
+    background: #1e2d50;
+  }
+
+  .ball {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    position: relative;
+    pointer-events: none;
+    transform-origin: center bottom;
+  }
+
+  .ball::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 10px;
+    width: 14px;
+    height: 10px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 50%;
+    transform: rotate(-30deg);
+  }
+
+  .cell.selected .ball {
+    animation: squish 0.65s infinite ease-in-out;
+  }
+
+  @keyframes squish {
+    0%   { transform: scaleX(1)    scaleY(1); }
+    20%  { transform: scaleX(0.94) scaleY(1.06); }
+    55%  { transform: scaleX(1.25) scaleY(0.62); }
+    75%  { transform: scaleX(0.96) scaleY(1.04); }
+    100% { transform: scaleX(1)    scaleY(1); }
+  }
+
+  @keyframes appear {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .ball.appearing {
+    animation: appear 0.25s ease-out forwards;
+  }
+
+  .ball.popping {
+    visibility: hidden;
+  }
+
+  #message {
+    margin-top: 18px;
+    font-size: 1.1rem;
+    color: #ffe066;
+    height: 28px;
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px #ffe06688;
+  }
+
+  #controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 12px;
+  }
+
+  button {
+    padding: 8px 22px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    letter-spacing: 1px;
+    font-weight: bold;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  button:hover { opacity: 0.85; transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+
+  #btn-new           { background: #5599ff; color: #fff; }
+  #btn-ai            { background: #cc9900; color: #fff; }
+  #btn-ai.active     { background: #cc2222; color: #fff; }
+  #btn-speed         { background: #334; color: #888; border: 1px solid #446; }
+  #btn-speed.active  { background: #226644; color: #fff; border-color: #226644; }
+
+  .color-red    { background: radial-gradient(circle at 35% 35%, #ff7777, #cc0000); }
+  .color-blue   { background: radial-gradient(circle at 35% 35%, #7799ff, #0033cc); }
+  .color-green  { background: radial-gradient(circle at 35% 35%, #77ee88, #009922); }
+  .color-yellow { background: radial-gradient(circle at 35% 35%, #ffee55, #cc9900); }
+  .color-purple { background: radial-gradient(circle at 35% 35%, #cc88ff, #7700cc); }
+  .color-cyan   { background: radial-gradient(circle at 35% 35%, #55eeff, #0099bb); }
+  .color-orange { background: radial-gradient(circle at 35% 35%, #ffaa44, #cc5500); }
+
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0009;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 10;
+  }
+
+  #overlay.show { display: flex; }
+
+  #overlay h2 {
+    font-size: 2.5rem;
+    color: #ffe066;
+    text-shadow: 0 0 20px #ffe066;
+    letter-spacing: 4px;
+  }
+
+  #overlay p {
+    font-size: 1.2rem;
+    color: #ccc;
+  }
+
+  #overlay button {
+    background: #5599ff;
+    color: #fff;
+    font-size: 1rem;
+    padding: 10px 30px;
+  }
+</style>
+</head>
+<body>
+
+<h1>RAINBOW LINES AI</h1>
+
+<div id="hud">
+  <div class="score-box">
+    <div class="score-label">Score</div>
+    <div class="score-value" id="score">0</div>
+  </div>
+  <div class="score-box">
+    <div class="score-label">Best</div>
+    <div class="score-value" id="best">0</div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+    <div class="preview-label">Next</div>
+    <div id="next-preview">
+      <div class="preview-ball" id="prev0"></div>
+      <div class="preview-ball" id="prev1"></div>
+      <div class="preview-ball" id="prev2"></div>
+    </div>
+  </div>
+</div>
+
+<div id="board"></div>
+<div id="message"></div>
+
+<div id="controls">
+  <button id="btn-new">New Game</button>
+  <button id="btn-ai">AI Play</button>
+  <button id="btn-speed">Fast Mode</button>
+</div>
+
+<div id="overlay">
+  <h2>GAME OVER</h2>
+  <p>No more moves! Final score: <span id="final-score"></span></p>
+  <button onclick="startGame()">Play Again</button>
+</div>
+
+<script>
+const GRID = 9;
+const COLORS = ['red','blue','green','yellow','purple','cyan','orange'];
+const MIN_LINE = 5;
+
+let grid = [];       // 2D array: null or color string
+let selected = null; // {r, c} or null
+let score = 0;
+let best = parseInt(localStorage.getItem('rainbowlinesai-best') || '0');
+let nextColors = [];
+let animating = false;
+
+const boardEl = document.getElementById('board');
+const scoreEl = document.getElementById('score');
+const bestEl  = document.getElementById('best');
+const msgEl   = document.getElementById('message');
+const overlay = document.getElementById('overlay');
+
+bestEl.textContent = best;
+
+// ── DOM ──────────────────────────────────────────────────────────────
+
+function buildBoard() {
+  boardEl.innerHTML = '';
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      cell.addEventListener('click', onCellClick);
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function cellEl(r, c) {
+  return boardEl.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+}
+
+function renderBall(r, c, animate = false) {
+  const cell = cellEl(r, c);
+  cell.innerHTML = '';
+  const color = grid[r][c];
+  if (color) {
+    const ball = document.createElement('div');
+    ball.className = `ball color-${color}`;
+    if (animate) {
+      ball.classList.add('appearing');
+      ball.addEventListener('animationend', () => ball.classList.remove('appearing'), { once: true });
+    }
+    cell.appendChild(ball);
+  }
+}
+
+function renderAll() {
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++)
+      renderBall(r, c);
+}
+
+function updatePreview() {
+  nextColors.forEach((col, i) => {
+    const el = document.getElementById(`prev${i}`);
+    el.className = `preview-ball color-${col}`;
+  });
+}
+
+// ── Game logic ────────────────────────────────────────────────────────
+
+function startGame() {
+  stopAI();
+  grid = Array.from({length: GRID}, () => Array(GRID).fill(null));
+  score = 0;
+  selected = null;
+  animating = false;
+  scoreEl.textContent = 0;
+  msgEl.textContent = '';
+  overlay.classList.remove('show');
+  buildBoard();
+  nextColors = randomColors();
+  updatePreview();
+  spawnBalls(3, true);
+  nextColors = randomColors();
+  updatePreview();
+}
+
+function randomColors() {
+  return Array.from({length: 3}, () => COLORS[Math.floor(Math.random() * COLORS.length)]);
+}
+
+function emptyCells() {
+  const cells = [];
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++)
+      if (!grid[r][c]) cells.push({r, c});
+  return cells;
+}
+
+function spawnBalls(count, initial = false) {
+  const empty = emptyCells();
+  if (!empty.length) return false;
+
+  const colorsToPlace = nextColors.slice(0, Math.min(count, empty.length));
+  // shuffle empty positions
+  for (let i = empty.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [empty[i], empty[j]] = [empty[j], empty[i]];
+  }
+
+  colorsToPlace.forEach((col, i) => {
+    const {r, c} = empty[i];
+    grid[r][c] = col;
+    renderBall(r, c, !initial);
+  });
+
+  return true;
+}
+
+// ── Pathfinding (BFS) ────────────────────────────────────────────────
+
+function findPath(sr, sc, er, ec) {
+  if (sr === er && sc === ec) return [];
+  const visited = Array.from({length: GRID}, () => Array(GRID).fill(false));
+  const prev    = Array.from({length: GRID}, () => Array(GRID).fill(null));
+  const queue   = [{r: sr, c: sc}];
+  visited[sr][sc] = true;
+
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  while (queue.length) {
+    const {r, c} = queue.shift();
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) continue;
+      if (visited[nr][nc]) continue;
+      if (grid[nr][nc] && !(nr === er && nc === ec)) continue;
+      visited[nr][nc] = true;
+      prev[nr][nc] = {r, c};
+      if (nr === er && nc === ec) {
+        // reconstruct
+        const path = [];
+        let cur = {r: nr, c: nc};
+        while (cur.r !== sr || cur.c !== sc) {
+          path.unshift(cur);
+          cur = prev[cur.r][cur.c];
+        }
+        return path;
+      }
+      queue.push({r: nr, c: nc});
+    }
+  }
+  return null;
+}
+
+// ── Line detection ───────────────────────────────────────────────────
+
+function findLines(r, c) {
+  const color = grid[r][c];
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]]; // horiz, vert, diag, anti-diag
+  const toRemove = new Set();
+
+  for (const [dr, dc] of dirs) {
+    const line = [{r, c}];
+    for (let s = 1; ; s++) {
+      const nr = r + s*dr, nc = c + s*dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID || grid[nr][nc] !== color) break;
+      line.push({r: nr, c: nc});
+    }
+    for (let s = 1; ; s++) {
+      const nr = r - s*dr, nc = c - s*dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID || grid[nr][nc] !== color) break;
+      line.push({r: nr, c: nc});
+    }
+    if (line.length >= MIN_LINE)
+      line.forEach(p => toRemove.add(`${p.r},${p.c}`));
+  }
+
+  return [...toRemove].map(k => {
+    const [pr, pc] = k.split(',').map(Number);
+    return {r: pr, c: pc};
+  });
+}
+
+// Scoring: more cells = bigger bonus
+function calcScore(count) {
+  return count * count * 2;
+}
+
+// ── Animation helpers ────────────────────────────────────────────────
+
+// Color map for particle fill
+const COLOR_MAP = {
+  red: '#dd2222', blue: '#2255ee', green: '#22bb44',
+  yellow: '#ddaa00', purple: '#9922cc', cyan: '#00aabb', orange: '#dd6600'
+};
+
+function animatePop(cells) {
+  return new Promise(resolve => {
+    // Collect ball info before hiding
+    const particles = cells.map(({r, c}) => {
+      const cell = cellEl(r, c);
+      const ball = cell.querySelector('.ball');
+      const rect = cell.getBoundingClientRect();
+      const color = grid[r][c];
+      if (ball) ball.classList.add('popping');
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, color };
+    });
+
+    // Full-screen canvas overlay
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:100';
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    // Spawn particles for each cell
+    const PARTICLE_COUNT = 7;
+    const allParticles = [];
+    particles.forEach(({x, y, color}) => {
+      const fill = COLOR_MAP[color] || '#ffffff';
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const angle = (Math.PI * 2 * i) / PARTICLE_COUNT + Math.random() * 0.5;
+        const speed = 1 + Math.random() * 2;
+        allParticles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 2 + Math.random() * 2.5,
+          alpha: 1,
+          fill,
+        });
+      }
+    });
+
+    const duration = 420;
+    const start = performance.now();
+
+    function frame(now) {
+      const elapsed = now - start;
+      const t = Math.min(elapsed / duration, 1);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      allParticles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.12; // gravity
+        p.alpha = 1 - t;
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.fill;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (1 - t * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        canvas.remove();
+        resolve();
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function animateMove(path, color) {
+  return new Promise(resolve => {
+    if (!path.length) { resolve(); return; }
+    // visually step through the path quickly
+    let i = 0;
+    const step = () => {
+      if (i < path.length) {
+        const {r, c} = path[i];
+        const prev = i === 0 ? null : path[i-1];
+        if (prev) {
+          grid[prev.r][prev.c] = null;
+          renderBall(prev.r, prev.c);
+        }
+        grid[r][c] = color;
+        renderBall(r, c);
+        i++;
+        setTimeout(step, 28);
+      } else {
+        resolve();
+      }
+    };
+    step();
+  });
+}
+
+// ── Click handler ────────────────────────────────────────────────────
+
+async function onCellClick(e) {
+  if (animating) return;
+  const r = parseInt(e.currentTarget.dataset.r);
+  const c = parseInt(e.currentTarget.dataset.c);
+
+  if (grid[r][c]) {
+    if (selected && selected.r === r && selected.c === c) {
+      // Clicking the active ball deselects it
+      clearSelection();
+      return;
+    }
+    clearSelection();
+    selected = {r, c};
+    cellEl(r, c).classList.add('selected');
+    msgEl.textContent = '';
+    return;
+  }
+
+  if (!selected) return;
+
+  // Attempt move
+  const {r: sr, c: sc} = selected;
+  const color = grid[sr][sc];
+  const path = findPath(sr, sc, r, c);
+
+  if (!path) {
+    msgEl.textContent = 'No path!';
+    setTimeout(() => { msgEl.textContent = ''; }, 1200);
+    return;
+  }
+
+  clearSelection();
+  animating = true;
+
+  // Move
+  grid[sr][sc] = null;
+  renderBall(sr, sc);
+  await animateMove(path, color);
+
+  // Check lines at destination
+  const matched = findLines(r, c);
+  let spawned = false;
+
+  if (matched.length) {
+    await animatePop(matched);
+    matched.forEach(({r: mr, c: mc}) => {
+      grid[mr][mc] = null;
+      renderBall(mr, mc);
+    });
+    const pts = calcScore(matched.length);
+    score += pts;
+    scoreEl.textContent = score;
+    if (score > best) {
+      best = score;
+      bestEl.textContent = best;
+      localStorage.setItem('rainbowlinesai-best', best);
+    }
+    showMessage(`+${pts}`, 900);
+    // Don't spawn new balls when lines cleared
+  } else {
+    // Spawn 3 new balls, then check lines for each
+    const placed = placeNextBalls();
+    spawned = true;
+    // After spawn, check if any new ball completed a line
+    let extraPts = 0;
+    const spawnsToCheck = [...placed];
+    for (const {r: nr, c: nc} of spawnsToCheck) {
+      if (!grid[nr][nc]) continue;
+      const m2 = findLines(nr, nc);
+      if (m2.length) {
+        await animatePop(m2);
+        m2.forEach(({r: mr, c: mc}) => {
+          grid[mr][mc] = null;
+          renderBall(mr, mc);
+        });
+        extraPts += calcScore(m2.length);
+      }
+    }
+    if (extraPts) {
+      score += extraPts;
+      scoreEl.textContent = score;
+      showMessage(`+${extraPts}`, 900);
+    }
+  }
+
+  animating = false;
+
+  // Check game over
+  if (emptyCells().length === 0) {
+    document.getElementById('final-score').textContent = score;
+    overlay.classList.add('show');
+    return;
+  }
+
+  if (!spawned) {
+    // Prepare next batch
+    nextColors = randomColors();
+    updatePreview();
+  }
+}
+
+function placeNextBalls() {
+  const empty = emptyCells();
+  if (!empty.length) return [];
+  for (let i = empty.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [empty[i], empty[j]] = [empty[j], empty[i]];
+  }
+  const toPlace = nextColors.slice(0, Math.min(3, empty.length));
+  const placed = [];
+  toPlace.forEach((col, i) => {
+    const {r, c} = empty[i];
+    grid[r][c] = col;
+    renderBall(r, c, true);
+    placed.push({r, c});
+  });
+  nextColors = randomColors();
+  updatePreview();
+  return placed;
+}
+
+function clearSelection() {
+  if (selected) {
+    cellEl(selected.r, selected.c).classList.remove('selected');
+    selected = null;
+  }
+}
+
+let msgTimer;
+function showMessage(text, duration) {
+  msgEl.textContent = text;
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { msgEl.textContent = ''; }, duration);
+}
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  if (confirm('Start a new game? Current progress will be lost.')) startGame();
+});
+
+// ── AI ────────────────────────────────────────────────────────────────
+
+let aiActive = false;
+let aiTimer  = null;
+let aiFast   = false;
+
+function cloneGrid(g) {
+  return g.map(row => row.slice());
+}
+
+function findPathOnGrid(g, sr, sc, er, ec) {
+  if (sr === er && sc === ec) return [];
+  const visited = Array.from({length: GRID}, () => Array(GRID).fill(false));
+  const prev    = Array.from({length: GRID}, () => Array(GRID).fill(null));
+  const queue   = [{r: sr, c: sc}];
+  visited[sr][sc] = true;
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  while (queue.length) {
+    const {r, c} = queue.shift();
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) continue;
+      if (visited[nr][nc]) continue;
+      if (g[nr][nc] && !(nr === er && nc === ec)) continue;
+      visited[nr][nc] = true;
+      prev[nr][nc] = {r, c};
+      if (nr === er && nc === ec) {
+        const path = [];
+        let cur = {r: nr, c: nc};
+        while (cur.r !== sr || cur.c !== sc) {
+          path.unshift(cur);
+          cur = prev[cur.r][cur.c];
+        }
+        return path;
+      }
+      queue.push({r: nr, c: nc});
+    }
+  }
+  return null;
+}
+
+function findLinesOnGrid(g, r, c) {
+  const color = g[r][c];
+  if (!color) return [];
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  const toRemove = new Set();
+  for (const [dr, dc] of dirs) {
+    const line = [{r, c}];
+    for (let s = 1; ; s++) {
+      const nr = r + s*dr, nc = c + s*dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID || g[nr][nc] !== color) break;
+      line.push({r: nr, c: nc});
+    }
+    for (let s = 1; ; s++) {
+      const nr = r - s*dr, nc = c - s*dc;
+      if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID || g[nr][nc] !== color) break;
+      line.push({r: nr, c: nc});
+    }
+    if (line.length >= MIN_LINE) line.forEach(p => toRemove.add(`${p.r},${p.c}`));
+  }
+  return [...toRemove].map(k => { const [pr,pc] = k.split(',').map(Number); return {r:pr,c:pc}; });
+}
+
+function evaluateGrid(g) {
+  let score = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  let empty = 0;
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      if (!g[r][c]) { empty++; continue; }
+      const color = g[r][c];
+      for (const [dr, dc] of dirs) {
+        // Only count from the start of each streak to avoid double-counting
+        const pr = r - dr, pc = c - dc;
+        if (pr >= 0 && pr < GRID && pc >= 0 && pc < GRID && g[pr][pc] === color) continue;
+        let len = 0, nr = r, nc = c;
+        while (nr >= 0 && nr < GRID && nc >= 0 && nc < GRID && g[nr][nc] === color) {
+          len++; nr += dr; nc += dc;
+        }
+        if (len >= 2) score += len * len * len;
+      }
+    }
+  }
+  score += empty * 3;
+  return score;
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function monteCarloEval(g, colors, samples = 15) {
+  let total = 0;
+  const empties = [];
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++)
+      if (!g[r][c]) empties.push({r, c});
+
+  if (empties.length === 0) return evaluateGrid(g);
+
+  for (let s = 0; s < samples; s++) {
+    const clone = cloneGrid(g);
+    const positions = shuffleArray(empties.slice()).slice(0, colors.length);
+    positions.forEach(({r, c}, i) => { clone[r][c] = colors[i]; });
+    total += evaluateGrid(clone);
+  }
+  return total / samples;
+}
+
+function findBestMove() {
+  let bestScore = -Infinity;
+  let bestMove  = null;
+
+  for (let sr = 0; sr < GRID; sr++) {
+    for (let sc = 0; sc < GRID; sc++) {
+      if (!grid[sr][sc]) continue;
+      const color = grid[sr][sc];
+
+      for (let er = 0; er < GRID; er++) {
+        for (let ec = 0; ec < GRID; ec++) {
+          if (grid[er][ec]) continue;
+          const path = findPath(sr, sc, er, ec);
+          if (!path) continue;
+
+          const sim = cloneGrid(grid);
+          sim[sr][sc] = null;
+          sim[er][ec] = color;
+
+          const matched = findLinesOnGrid(sim, er, ec);
+          let moveScore;
+
+          if (matched.length) {
+            // Scoring move: heavily preferred
+            const afterClear = cloneGrid(sim);
+            matched.forEach(({r, c}) => { afterClear[r][c] = null; });
+            moveScore = 10000 + calcScore(matched.length) * 100 + evaluateGrid(afterClear);
+          } else {
+            // Non-scoring: use Monte Carlo to account for spawn impact
+            moveScore = monteCarloEval(sim, nextColors);
+          }
+
+          // Prefer longer paths as tiebreaker (distributes balls more)
+          if (moveScore > bestScore || (moveScore === bestScore && path.length > (bestMove?.path.length ?? 0))) {
+            bestScore = moveScore;
+            bestMove  = {sr, sc, er, ec, color, path};
+          }
+        }
+      }
+    }
+  }
+  return bestMove;
+}
+
+async function aiStep() {
+  if (!aiActive || animating) return;
+
+  const move = findBestMove();
+  if (!move) { stopAI(); return; }
+
+  const {sr, sc, er, ec, color, path} = move;
+  clearSelection();
+  animating = true;
+
+  grid[sr][sc] = null;
+  renderBall(sr, sc);
+  await animateMove(path, color);
+
+  const matched = findLines(er, ec);
+  let spawned = false;
+
+  if (matched.length) {
+    await animatePop(matched);
+    matched.forEach(({r, c}) => { grid[r][c] = null; renderBall(r, c); });
+    const pts = calcScore(matched.length);
+    score += pts;
+    scoreEl.textContent = score;
+    if (score > best) { best = score; bestEl.textContent = best; localStorage.setItem('rainbowlinesai-best', best); }
+    showMessage(`+${pts}`, 700);
+  } else {
+    const placed = placeNextBalls();
+    spawned = true;
+    let extraPts = 0;
+    for (const {r: nr, c: nc} of placed) {
+      if (!grid[nr][nc]) continue;
+      const m2 = findLines(nr, nc);
+      if (m2.length) {
+        await animatePop(m2);
+        m2.forEach(({r, c}) => { grid[r][c] = null; renderBall(r, c); });
+        extraPts += calcScore(m2.length);
+      }
+    }
+    if (extraPts) {
+      score += extraPts;
+      scoreEl.textContent = score;
+      if (score > best) { best = score; bestEl.textContent = best; localStorage.setItem('rainbowlinesai-best', best); }
+      showMessage(`+${extraPts}`, 700);
+    }
+  }
+
+  animating = false;
+
+  if (emptyCells().length === 0) {
+    document.getElementById('final-score').textContent = score;
+    overlay.classList.add('show');
+    stopAI();
+    return;
+  }
+
+  if (!spawned) { nextColors = randomColors(); updatePreview(); }
+
+  if (aiActive) aiTimer = setTimeout(aiStep, aiFast ? 0 : 380);
+}
+
+function startAI() {
+  aiActive = true;
+  const btn = document.getElementById('btn-ai');
+  btn.textContent = 'Stop AI';
+  btn.classList.add('active');
+  clearSelection();
+  aiStep();
+}
+
+function stopAI() {
+  aiActive = false;
+  clearTimeout(aiTimer);
+  aiTimer = null;
+  const btn = document.getElementById('btn-ai');
+  if (btn) { btn.textContent = 'AI Play'; btn.classList.remove('active'); }
+}
+
+document.getElementById('btn-ai').addEventListener('click', () => {
+  aiActive ? stopAI() : startAI();
+});
+
+document.getElementById('btn-speed').addEventListener('click', () => {
+  aiFast = !aiFast;
+  const btn = document.getElementById('btn-speed');
+  btn.textContent = aiFast ? 'Fast Mode' : 'Fast Mode';
+  btn.classList.toggle('active', aiFast);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────
+startGame();
+</script>
+</body>
+</html>
