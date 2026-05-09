@@ -1,5 +1,9 @@
 # Rainbow Lines AI
 
+<p align="center">
+  <img src="screenshot.png" alt="Rainbow Lines AI" width="500">
+</p>
+
 A browser version of the classic Color Lines puzzle, with an AI player that takes over the board and plays for you.
 
 > **Disclaimer:** This project is just me experimenting with full on AI-assisted coding. Don't take it too seriously — it's a sandbox, not a polished product.
